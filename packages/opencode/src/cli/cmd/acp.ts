@@ -10,24 +10,46 @@ export const AcpCommand = effectCmd({
   command: "acp",
   describe: "start ACP (Agent Client Protocol) server",
   builder: (yargs) => {
-    return withNetworkOptions(yargs).option("cwd", {
-      describe: "working directory",
-      type: "string",
-      default: process.cwd(),
-    })
+    return withNetworkOptions(yargs)
+      .option("cwd", {
+        describe: "working directory",
+        type: "string",
+        default: process.cwd(),
+      })
+      .option("attach", {
+        type: "string",
+        describe: "attach to a running opencode server (e.g., http://localhost:4096)",
+      })
+      .option("password", {
+        alias: ["p"],
+        type: "string",
+        describe: "basic auth password (defaults to OPENCODE_SERVER_PASSWORD)",
+      })
+      .option("username", {
+        alias: ["u"],
+        type: "string",
+        describe: "basic auth username (defaults to OPENCODE_SERVER_USERNAME or 'opencode')",
+      })
   },
+  instance: (args) => !args.attach,
   handler: Effect.fn("Cli.acp")(function* (args) {
-    const { Server } = yield* Effect.promise(() => import("@/server/server"))
     const { ACP } = yield* Effect.promise(() => import("@/acp/agent"))
     ACPProfile.mark("cli.acp.handler")
     process.env.OPENCODE_CLIENT = "acp"
-    const opts = yield* resolveNetworkOptions(args)
-    const server = yield* Effect.promise(() => ACPProfile.measure("cli.acp.server.listen", () => Server.listen(opts)))
-
-    const sdk = createOpencodeClient({
-      baseUrl: `http://${server.hostname}:${server.port}`,
-      headers: ServerAuth.headers(),
-    })
+    const sdk = args.attach
+      ? createOpencodeClient({
+          baseUrl: args.attach,
+          headers: ServerAuth.headers({ password: args.password, username: args.username }),
+        })
+      : yield* Effect.gen(function* () {
+          const { Server } = yield* Effect.promise(() => import("@/server/server"))
+          const opts = yield* resolveNetworkOptions(args)
+          const server = yield* Effect.promise(() => ACPProfile.measure("cli.acp.server.listen", () => Server.listen(opts)))
+          return createOpencodeClient({
+            baseUrl: `http://${server.hostname}:${server.port}`,
+            headers: ServerAuth.headers(),
+          })
+        })
 
     const input = new WritableStream<Uint8Array>({
       write(chunk) {
