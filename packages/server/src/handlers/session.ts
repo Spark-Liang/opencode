@@ -1,4 +1,7 @@
 import { Session } from "@opencode-ai/core/session"
+import { Agent } from "@opencode-ai/core/agent"
+import { LocationServiceMap } from "@opencode-ai/core/location-service-map"
+import { PluginSupervisor } from "@opencode-ai/core/plugin/supervisor"
 import { SessionTransfer } from "@opencode-ai/core/session/transfer"
 import { InstructionEntry } from "@opencode-ai/core/session/instruction-entry"
 import { DateTime, Effect, Stream } from "effect"
@@ -91,14 +94,24 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
       .handle(
         "session.create",
         Effect.fn(function* (ctx) {
+          const location = ctx.payload.location ?? { directory: AbsolutePath.make(process.cwd()) }
+          const selectedAgent = ctx.payload.model ? undefined : ctx.payload.agent
+          const agentModel = selectedAgent
+            ? yield* Effect.gen(function* () {
+                const plugins = yield* PluginSupervisor.Service
+                yield* plugins.flush
+                const agents = yield* Agent.Service
+                return (yield* agents.get(selectedAgent))?.model
+              }).pipe(Effect.provide(LocationServiceMap.Service.get(location)))
+            : undefined
           return {
             data: yield* session
               .create({
                 id: ctx.payload.id,
                 title: ctx.payload.title,
                 agent: ctx.payload.agent,
-                model: ctx.payload.model,
-                location: ctx.payload.location ?? { directory: AbsolutePath.make(process.cwd()) },
+                model: ctx.payload.model ?? agentModel,
+                location,
               })
               .pipe(Effect.orDie),
           }
