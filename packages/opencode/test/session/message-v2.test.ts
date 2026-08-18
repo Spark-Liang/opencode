@@ -286,6 +286,14 @@ describe("session.message-v2.toModelMessage", () => {
             url: "https://example.com/dir",
           },
           {
+            ...basePart(messageID, "p-hidden-image"),
+            type: "file",
+            mime: "image/png",
+            filename: "hidden.png",
+            url: "https://example.com/hidden.png",
+            ignored: true,
+          },
+          {
             ...basePart(messageID, "p6"),
             type: "compaction",
             auto: true,

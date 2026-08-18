@@ -1010,7 +1010,7 @@ const layer = Layer.effect(
       )
 
       const parts = yield* Effect.forEach(resolvedParts, (part) =>
-        part.type === "file" && part.mime.startsWith("image/")
+        part.type === "file" && !part.ignored && part.mime.startsWith("image/")
           ? image.normalize(part).pipe(
               Effect.catchIf(
                 (error) => error instanceof Image.ResizerUnavailableError,

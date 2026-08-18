@@ -373,6 +373,34 @@ it.instance("passes native image capability to chat.message hooks", () =>
   }),
 )
 
+it.instance("preserves ignored image parts without normalizing them", () =>
+  Effect.gen(function* () {
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({ title: "Pinned" })
+    const message = yield* prompt.prompt({
+      sessionID: chat.id,
+      model: ref,
+      agent: "build",
+      noReply: true,
+      parts: [
+        { type: "text", text: "Describe this image" },
+        {
+          type: "file",
+          mime: "image/png",
+          filename: "deferred.png",
+          url: "data:image/png;base64,not-an-image",
+          ignored: true,
+        },
+      ],
+    })
+
+    expect(message.parts).toContainEqual(
+      expect.objectContaining({ type: "file", filename: "deferred.png", ignored: true }),
+    )
+  }),
+)
+
 const writeText = Effect.fn("test.writeText")(function* (file: string, text: string) {
   const fs = yield* FSUtil.Service
   yield* fs.writeWithDirs(file, text)

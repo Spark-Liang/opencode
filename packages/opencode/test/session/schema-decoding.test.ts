@@ -281,14 +281,14 @@ describe("SessionPrompt input schemas", () => {
       sessionID,
       parts: [
         { type: "text" as const, text: "hello" },
-        { type: "file" as const, mime: "image/png", url: "data:image/png;base64,AAAA" },
+        { type: "file" as const, mime: "image/png", url: "data:image/png;base64,AAAA", ignored: true },
       ],
     }
     const input: unknown = expected
     const decoded = decode(input)
     expect(decoded.parts).toHaveLength(2)
     expect(decoded.parts[0]).toMatchObject({ type: "text", text: "hello" })
-    expect(decoded.parts[1]).toMatchObject({ type: "file", mime: "image/png" })
+    expect(decoded.parts[1]).toMatchObject({ type: "file", mime: "image/png", ignored: true })
   })
 
   test("PromptInput rejects unknown part type", () => {
