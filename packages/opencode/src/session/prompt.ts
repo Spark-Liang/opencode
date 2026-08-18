@@ -644,12 +644,13 @@ const layer = Layer.effect(
       }
 
       const model = input.model ?? ag.model ?? (yield* currentModel(input.sessionID))
+      const resolved = yield* provider
+        .getModel(model.providerID, model.modelID)
+        .pipe(Effect.catchIf(Provider.ModelNotFoundError.isInstance, () => Effect.succeed(undefined)))
       const same = ag.model && model.providerID === ag.model.providerID && model.modelID === ag.model.modelID
       const full =
         !input.variant && ag.variant && same
-          ? yield* provider
-              .getModel(model.providerID, model.modelID)
-              .pipe(Effect.catchIf(Provider.ModelNotFoundError.isInstance, () => Effect.succeed(undefined)))
+          ? resolved
           : undefined
       const variant = input.variant ?? (ag.variant && full?.variants?.[ag.variant] ? ag.variant : undefined)
 
@@ -1001,7 +1002,7 @@ const layer = Layer.effect(
         {
           sessionID: input.sessionID,
           agent: input.agent,
-          model: input.model,
+          model: resolved ?? input.model,
           messageID: input.messageID,
           variant: input.variant,
         },

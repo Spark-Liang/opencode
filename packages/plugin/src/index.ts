@@ -235,7 +235,7 @@ export interface Hooks {
     input: {
       sessionID: string
       agent?: string
-      model?: { providerID: string; modelID: string }
+      model?: Model | { providerID: string; modelID: string }
       messageID?: string
       variant?: string
     },

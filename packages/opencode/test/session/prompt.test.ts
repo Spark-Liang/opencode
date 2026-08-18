@@ -8,7 +8,7 @@ import { EventV2Bridge } from "@/event-v2-bridge"
 import { expect } from "bun:test"
 import { Cause, Deferred, Duration, Effect, Exit, Fiber, Layer } from "effect"
 import path from "path"
-import { fileURLToPath } from "url"
+import { fileURLToPath, pathToFileURL } from "url"
 import { NamedError } from "@opencode-ai/core/util/error"
 import { Agent as AgentSvc } from "../../src/agent/agent"
 import { BackgroundJob } from "@/background/job"
@@ -302,6 +302,76 @@ function providerCfg(url: string) {
     },
   }
 }
+
+it.instance("passes native image capability to chat.message hooks", () =>
+  Effect.gen(function* () {
+    const { directory } = yield* TestInstance
+    const plugin = path.join(directory, "plugin.ts")
+    yield* writeText(
+      plugin,
+      [
+        "export default async () => ({",
+        '  "chat.message": async (input, output) => {',
+        "    if (input.model?.capabilities?.input?.image) return",
+        "    output.parts.splice(0, output.parts.length, {",
+        '      id: "prt_fallback",',
+        "      sessionID: input.sessionID,",
+        "      messageID: output.message.id,",
+        '      type: "text",',
+        "      synthetic: true,",
+        '      text: "fallback",',
+        "    })",
+        "  },",
+        "})",
+        "",
+      ].join("\n"),
+    )
+    yield* writeConfig(directory, {
+      ...cfg,
+      plugin: [pathToFileURL(plugin).href],
+      provider: {
+        ...cfg.provider,
+        test: {
+          ...cfg.provider.test,
+          models: {
+            ...cfg.provider.test.models,
+            "test-model": {
+              ...cfg.provider.test.models["test-model"],
+              modalities: { input: ["text", "image"], output: ["text"] },
+            },
+          },
+        },
+      },
+    })
+
+    const config = yield* Config.Service
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    yield* config.get()
+    const image = Buffer.from(
+      yield* Effect.promise(() => Bun.file(path.join(import.meta.dir, "../tool/fixtures/large-image.png")).arrayBuffer()),
+    ).toString("base64")
+    const chat = yield* sessions.create({ title: "Pinned" })
+    const message = yield* prompt.prompt({
+      sessionID: chat.id,
+      model: ref,
+      agent: "build",
+      noReply: true,
+      parts: [
+        { type: "text", text: "Describe this image" },
+        {
+          type: "file",
+          mime: "image/png",
+          filename: "pixel.png",
+          url: `data:image/png;base64,${image}`,
+        },
+      ],
+    })
+
+    expect(message.parts.some((part) => part.type === "file" && part.filename === "pixel.png")).toBe(true)
+    expect(message.parts.some((part) => part.type === "text" && part.text === "fallback")).toBe(false)
+  }),
+)
 
 const writeText = Effect.fn("test.writeText")(function* (file: string, text: string) {
   const fs = yield* FSUtil.Service
